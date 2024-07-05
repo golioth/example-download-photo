@@ -7,6 +7,14 @@ Barebones starting point for building Golioth examples using the
 folder that is a sibling to the `deps` folder where all dependencies are
 installed.
 
+## Supported Boards
+
+| Vendor    | Model                      | Zephyr name          |
+| --------- | -------------------------- | -------------------- |
+| Espressif | ESP32-DevkitC              | esp32_devkitc_wrover |
+| Nordic    | nRF9160 DK                 | nrf9160dk_nrf9160_ns |
+| NXP       | i.MX RT1024 Evaluation Kit | mimxrt1024_evk       |
+
 ## Local Setup
 
 > :important: Do not clone this repo using git. Zephyr's ``west`` meta
@@ -57,15 +65,15 @@ on the device you are using.
 ### Zephyr build commands
 
 ```
-$ (.venv) west build -p -b <my_board_name> --sysbuild app
-$ (.venv) west flash
+west build -p -b <my_board_name> --sysbuild app
+west flash
 ```
 
 ### NCS build commands
 
 ```
-$ (.venv) west build -p -b nrf9160dk_nrf9160_ns app
-$ (.venv) west flash
+west build -p -b nrf9160dk_nrf9160_ns app
+west flash
 ```
 
 ### Configure Authentication credential
@@ -81,12 +89,32 @@ credentials and reboot:
 
 ## Features
 
-This example currently implements the following Golioth services
+This example implements the following Golioth services:
 
 * Runtime credentials
 * Backend Logging
 * Device Settings
 * OTA Firmware Update
+
+## Switch Between Zephyr and NCS
+
+After initializing your local repository, you may switch between
+building for Zephyr boards and building for NCS boards by using the
+following commands:
+
+### Switch to NCS Build
+
+```
+west config manifest.file west-ncs.yml
+west update
+```
+
+### Switch to Zephyr Build
+
+```
+west config manifest.file west-zephyr.yml
+west update
+```
 
 ## Using this template to start a new project
 
