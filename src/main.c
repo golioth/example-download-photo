@@ -14,6 +14,7 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <samples/common/net_connect.h>
 #include <samples/common/sample_credentials.h>
 #include <zephyr/kernel.h>
+#include <zephyr/fs/fs.h>
 
 /* Current firmware version; update in VERSION file */
 static const char *_current_version =
@@ -118,10 +119,93 @@ static void on_ota_manifest(struct golioth_client *client,
     }
 }
 
+enum golioth_status write_block(const struct golioth_ota_component *component,
+                                uint32_t block_idx,
+                                uint8_t *block_buffer,
+                                size_t block_size,
+                                bool is_last,
+                                void *arg)
+{
+    const char *filename = component->package;
+    struct fs_file_t fp = {};
+    fs_mode_t flags = FS_O_CREATE | FS_O_WRITE;
+    char path[32];
+    int err;
+    ssize_t ret;
+
+    if (block_idx == 0) {
+        flags |= FS_O_TRUNC;
+    }
+
+    sprintf(path, "/storage/%s", filename);
+
+    err = fs_open(&fp, path, flags);
+    if (err) {
+        LOG_ERR("Failed to open %s: %d", filename, err);
+
+        return err;
+    }
+
+    err = fs_seek(&fp, block_idx * CONFIG_GOLIOTH_BLOCKWISE_DOWNLOAD_BUFFER_SIZE, FS_SEEK_SET);
+    if (err) {
+        goto fp_close;
+    }
+
+    ret = fs_write(&fp, block_buffer, block_size);
+    if (ret < 0) {
+        goto fp_close;
+    }
+
+fp_close:
+    fs_close(&fp);
+
+    return GOLIOTH_OK;
+}
+
+static int greeting_show(void)
+{
+    struct fs_file_t greeting_fp = {};
+    int err;
+    ssize_t ret;
+
+    err = fs_open(&greeting_fp, "/storage/greeting", FS_O_READ);
+    if (err) {
+        LOG_ERR("Failed to open greeting: %d", err);
+
+        return err;
+    }
+
+    while (true) {
+        uint8_t buffer[16];
+
+        ret = fs_read(&greeting_fp, buffer, sizeof(buffer));
+        if (ret < 0) {
+            err = ret;
+            goto greeting_close;
+        }
+        if (ret == 0) {
+            break;
+        }
+
+        LOG_HEXDUMP_INF(buffer, ret, "greeting");
+    }
+
+greeting_close:
+    fs_close(&greeting_fp);
+
+    if (err) {
+        return GOLIOTH_ERR_FAIL;
+    }
+
+    return 0;
+}
+
 int main(void)
 {
     enum golioth_status status;
     struct ota_observe_data ota_observe_data = {};
+
+    greeting_show();
 
     LOG_DBG("Start Golioth example_download_photo");
     LOG_INF("Firmware version: %s", _current_version);
@@ -201,7 +285,9 @@ int main(void)
         for (size_t i = 0; i < ota_observe_data.manifest.num_components; i++) {
             struct golioth_ota_component *component = &ota_observe_data.manifest.components[i];
 
-            LOG_INF("component %zu: package=%s version=%s", i, component->package, component->version);
+            LOG_INF("component %zu: package=%s version=%s uri=%s hash=%s", i, component->package, component->version, component->uri, component->hash);
+
+            status = golioth_ota_download_component(client, component, write_block, NULL);
         }
     }
 }
