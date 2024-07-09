@@ -7,6 +7,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(example_template, LOG_LEVEL_DBG);
 
+#include <app_version.h>
 #include <golioth/client.h>
 #include <golioth/fw_update.h>
 #include <golioth/settings.h>
@@ -15,7 +16,8 @@ LOG_MODULE_REGISTER(example_template, LOG_LEVEL_DBG);
 #include <zephyr/kernel.h>
 
 /* Current firmware version; update in prj.conf or via build argument */
-static const char *_current_version = CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION;
+static const char *_current_version =
+    STRINGIFY(APP_VERSION_MAJOR) "." STRINGIFY(APP_VERSION_MINOR) "." STRINGIFY(APP_PATCHLEVEL);
 
 static struct golioth_client *client;
 K_SEM_DEFINE(connected, 0, 1);
@@ -75,7 +77,7 @@ static int app_settings_register(struct golioth_client *client)
 int main(void)
 {
     LOG_DBG("Start Golioth example_template");
-    LOG_INF("Firmware version: %s", CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION);
+    LOG_INF("Firmware version: %s", _current_version);
 
     /* Get system thread id so loop delay change event can wake main */
     _system_thread = k_current_get();

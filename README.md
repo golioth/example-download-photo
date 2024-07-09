@@ -55,9 +55,8 @@ pip install -r deps/zephyr/scripts/requirements.txt
 
 ## Building the application
 
-Prior to building, update ``CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION`` in the
-``prj.conf`` file to reflect the firmware version number you want to
-assign to this build.
+Prior to building, update ``VERSION`` file to reflect the firmware
+version number you want to assign to this build.
 
 Then run the following commands to build and program the firmware based
 on the device you are using.
