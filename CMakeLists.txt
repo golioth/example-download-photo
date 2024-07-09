@@ -17,3 +17,6 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(example_template)
 
 target_sources(app PRIVATE src/main.c)
+if(CONFIG_SOC_FAMILY_ESPRESSIF_ESP32 AND NOT CONFIG_BOOTLOADER_MCUBOOT)
+    target_sources_ifndef(CONFIG_BOOTLOADER_MCUBOOT app PRIVATE src/mcuboot_assert.c)
+endif()
