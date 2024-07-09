@@ -16,6 +16,8 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
 
+#include <mbedtls/sha256.h>
+
 /* Current firmware version; update in VERSION file */
 static const char *_current_version =
     STRINGIFY(APP_VERSION_MAJOR) "." STRINGIFY(APP_VERSION_MINOR) "." STRINGIFY(APP_PATCHLEVEL);
@@ -164,9 +166,18 @@ fp_close:
 
 static int greeting_show(void)
 {
+    mbedtls_sha256_context ctx;
+    char hash[32];
     struct fs_file_t greeting_fp = {};
     int err;
     ssize_t ret;
+
+    mbedtls_sha256_init(&ctx);
+
+    err = mbedtls_sha256_starts(&ctx, 0);
+    if (err) {
+        return -EFAULT;
+    }
 
     err = fs_open(&greeting_fp, "/storage/greeting", FS_O_READ);
     if (err) {
@@ -181,6 +192,7 @@ static int greeting_show(void)
         ret = fs_read(&greeting_fp, buffer, sizeof(buffer));
         if (ret < 0) {
             err = ret;
+            LOG_ERR("Failed to read: %d", err);
             goto greeting_close;
         }
         if (ret == 0) {
@@ -188,7 +200,21 @@ static int greeting_show(void)
         }
 
         LOG_HEXDUMP_INF(buffer, ret, "greeting");
+
+        err = mbedtls_sha256_update(&ctx, buffer, ret);
+        if (err) {
+            LOG_ERR("Failed to get update sha256: %d", err);
+            goto greeting_close;
+        }
     }
+
+    err = mbedtls_sha256_finish(&ctx, hash);
+    if (err) {
+        LOG_ERR("Failed to finish sha256 hash: %d", err);
+        return -EFAULT;
+    }
+
+    LOG_HEXDUMP_INF(hash, sizeof(hash), "hash");
 
 greeting_close:
     fs_close(&greeting_fp);
