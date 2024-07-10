@@ -229,6 +229,84 @@ greeting_close:
     return 0;
 }
 
+static lv_img_dsc_t img_background;
+
+static int background_show(void)
+{
+    char hash[32] = {};
+    struct fs_dirent dirent;
+    struct fs_file_t background_fp = {};
+    lv_img_header_t *img_header;
+    uint8_t *buffer;
+    int err;
+    ssize_t ret;
+
+    err = fs_stat("/storage/background", &dirent);
+    if (err) {
+        if (err == -ENOENT) {
+            LOG_WRN("No background image found on FS");
+        } else {
+            LOG_ERR("Failed to check/stat background image: %d", err);
+        }
+
+        return err;
+    }
+
+    LOG_INF("Background image file size: %zu", dirent.size);
+
+    buffer = malloc(dirent.size);
+    if (!buffer) {
+        LOG_ERR("Failed to allocate memory");
+        return -ENOMEM;
+    }
+
+    err = fs_open(&background_fp, "/storage/background", FS_O_READ);
+    if (err) {
+        LOG_WRN("Failed to load background: %d", err);
+        goto buffer_free;
+    }
+
+    ret = fs_read(&background_fp, buffer, dirent.size);
+    if (ret < 0) {
+        LOG_ERR("Failed to read: %zd", ret);
+        err = ret;
+        goto background_close;
+    }
+
+    if (ret != dirent.size) {
+        LOG_ERR("ret (%d) != dirent.size (%d)", (int) ret, (int) dirent.size);
+        err = -EIO;
+        goto background_close;
+    }
+
+    /* LOG_HEXDUMP_INF(buffer, ret, "background"); */
+
+    err = mbedtls_sha256(buffer, dirent.size, hash, 0);
+    if (err) {
+        LOG_ERR("Failed to get update sha256: %d", err);
+        goto background_close;
+    }
+
+    LOG_HEXDUMP_INF(hash, sizeof(hash), "hash");
+
+    img_header = (void *)buffer;
+    img_background.header = *img_header;
+    img_background.data_size = dirent.size - sizeof(*img_header);
+    img_background.data = &buffer[sizeof(*img_header)];
+
+    lv_obj_t * background = lv_img_create(lv_scr_act());
+    lv_img_set_src(background, &img_background);
+    lv_obj_align(background, LV_ALIGN_CENTER, 0, 0);
+
+background_close:
+    fs_close(&background_fp);
+
+buffer_free:
+    free(buffer);
+
+    return err;
+}
+
 int main(void)
 {
     enum golioth_status status;
@@ -239,6 +317,7 @@ int main(void)
     LOG_INF("Firmware version: %s", _current_version);
 
     greeting_show();
+    background_show();
 
     char count_str[11] = {0};
     const struct device *display_dev;
