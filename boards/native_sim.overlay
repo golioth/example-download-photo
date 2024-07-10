@@ -14,3 +14,7 @@
 		};
 	};
 };
+
+&storage_partition {
+	reg = <DT_SIZE_M(1) DT_SIZE_M(1)>;
+};
