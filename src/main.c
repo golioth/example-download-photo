@@ -124,6 +124,37 @@ static void on_ota_manifest(struct golioth_client *client,
     }
 }
 
+struct component_desc
+{
+    const char *name;
+    uint8_t hash[32];
+};
+
+static struct component_desc component_descs[] = {
+    { .name = "greeting" },
+    { .name = "background" },
+};
+
+static int component_update_hash(struct component_desc *desc, uint8_t hash[32])
+{
+    memcpy(desc->hash, hash, 32);
+
+    return 0;
+}
+
+static int component_name_hash_cmp(const char *name, uint8_t hash[32])
+{
+    for (size_t i = 0; i < ARRAY_SIZE(component_descs); i++) {
+        if (strcmp(component_descs[i].name, name)) {
+            continue;
+        }
+
+        return memcmp(component_descs[i].hash, hash, 32);
+    }
+
+    return -ENOENT;
+}
+
 enum golioth_status write_block(const struct golioth_ota_component *component,
                                 uint32_t block_idx,
                                 uint8_t *block_buffer,
@@ -219,6 +250,8 @@ static int greeting_show(void)
 
     LOG_HEXDUMP_INF(hash, sizeof(hash), "hash");
 
+    component_update_hash(&component_descs[0], hash);
+
 greeting_close:
     fs_close(&greeting_fp);
 
@@ -288,6 +321,8 @@ static int background_show(void)
     }
 
     LOG_HEXDUMP_INF(hash, sizeof(hash), "hash");
+
+    component_update_hash(&component_descs[1], hash);
 
     img_header = (void *)buffer;
     img_background.header = *img_header;
@@ -420,8 +455,17 @@ int main(void)
 
             for (size_t i = 0; i < ota_observe_data.manifest.num_components; i++) {
                 struct golioth_ota_component *component = &ota_observe_data.manifest.components[i];
+                uint8_t hash_bin[32];
 
-                LOG_INF("component %zu: package=%s version=%s uri=%s hash=%s", i, component->package, component->version, component->uri, component->hash);
+                LOG_INF("component %zu: package=%s version=%s uri=%s hash=%s size=%d",
+                        i, component->package, component->version, component->uri, component->hash, (int)component->size);
+
+                hex2bin(component->hash, strlen(component->hash), hash_bin, sizeof(hash_bin));
+
+                if (!component_name_hash_cmp(component->package, hash_bin)) {
+                    LOG_INF("Already up to date!");
+                    continue;
+                }
 
                 status = golioth_ota_download_component(client, component, write_block, NULL);
             }
