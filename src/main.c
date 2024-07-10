@@ -16,6 +16,9 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
 
+#include <zephyr/drivers/display.h>
+#include <lvgl.h>
+
 #include <mbedtls/sha256.h>
 
 /* Current firmware version; update in VERSION file */
@@ -230,11 +233,30 @@ int main(void)
 {
     enum golioth_status status;
     struct ota_observe_data ota_observe_data = {};
-
-    greeting_show();
+    int err;
 
     LOG_DBG("Start Golioth example_download_photo");
     LOG_INF("Firmware version: %s", _current_version);
+
+    greeting_show();
+
+    char count_str[11] = {0};
+    const struct device *display_dev;
+    lv_obj_t *count_label;
+    uint32_t count = 0;
+
+    display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+    if (!device_is_ready(display_dev)) {
+        LOG_ERR("Device not ready, aborting test");
+        return 0;
+    }
+
+    count_label = lv_label_create(lv_scr_act());
+    lv_obj_align(count_label, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_label_set_text(count_label, "0");
+
+    lv_task_handler();
+    display_blanking_off(display_dev);
 
     /* Get system thread id so loop delay change event can wake main */
     _system_thread = k_current_get();
@@ -304,16 +326,26 @@ int main(void)
 
     while (true)
     {
-        k_sem_take(&ota_observe_data.manifest_received, K_FOREVER);
+        uint32_t count_cur = k_uptime_get() / 1000;
+        if (count_cur != count) {
+            count = count_cur;
+            sprintf(count_str, "%d", (int) count);
+            lv_label_set_text(count_label, count_str);
+        }
 
-        LOG_INF("Received new manifest (num_components=%zu)", ota_observe_data.manifest.num_components);
+        lv_task_handler();
 
-        for (size_t i = 0; i < ota_observe_data.manifest.num_components; i++) {
-            struct golioth_ota_component *component = &ota_observe_data.manifest.components[i];
+        err = k_sem_take(&ota_observe_data.manifest_received, K_MSEC(10));
+        if (!err) {
+            LOG_INF("Received new manifest (num_components=%zu)", ota_observe_data.manifest.num_components);
 
-            LOG_INF("component %zu: package=%s version=%s uri=%s hash=%s", i, component->package, component->version, component->uri, component->hash);
+            for (size_t i = 0; i < ota_observe_data.manifest.num_components; i++) {
+                struct golioth_ota_component *component = &ota_observe_data.manifest.components[i];
 
-            status = golioth_ota_download_component(client, component, write_block, NULL);
+                LOG_INF("component %zu: package=%s version=%s uri=%s hash=%s", i, component->package, component->version, component->uri, component->hash);
+
+                status = golioth_ota_download_component(client, component, write_block, NULL);
+            }
         }
     }
 }
