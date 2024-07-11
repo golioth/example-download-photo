@@ -15,12 +15,15 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <samples/common/sample_credentials.h>
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
+#include <zephyr/logging/log_ctrl.h>
 #include <zephyr/sys/reboot.h>
 
 #include <zephyr/drivers/display.h>
 #include <lvgl.h>
 
 #include <mbedtls/sha256.h>
+
+#include "flash.h"
 
 /* Current firmware version; update in VERSION file */
 static const char * const _current_version =
@@ -81,6 +84,96 @@ static int app_settings_register(struct golioth_client *client)
     return err;
 }
 
+enum golioth_status write_to_storage(const struct golioth_ota_component *component,
+                                     uint32_t block_idx,
+                                     uint8_t *block_buffer,
+                                     size_t block_size,
+                                     bool is_last,
+                                     void *arg)
+{
+    const char *filename = component->package;
+    struct fs_file_t fp = {};
+    fs_mode_t flags = FS_O_CREATE | FS_O_WRITE;
+    char path[32];
+    int err;
+    ssize_t ret;
+
+    LOG_INF("Writing %s block idx %u", filename, (unsigned int) block_idx);
+
+    if (block_idx == 0) {
+        flags |= FS_O_TRUNC;
+    }
+
+    sprintf(path, "/storage/%s", filename);
+
+    err = fs_open(&fp, path, flags);
+    if (err) {
+        LOG_ERR("Failed to open %s: %d", filename, err);
+
+        return GOLIOTH_ERR_FAIL;
+    }
+
+    err = fs_seek(&fp, block_idx * CONFIG_GOLIOTH_BLOCKWISE_DOWNLOAD_BUFFER_SIZE, FS_SEEK_SET);
+    if (err) {
+        goto fp_close;
+    }
+
+    ret = fs_write(&fp, block_buffer, block_size);
+    if (ret < 0) {
+        err = ret;
+        goto fp_close;
+    }
+
+fp_close:
+    fs_close(&fp);
+
+    if (err) {
+        return GOLIOTH_ERR_FAIL;
+    }
+
+    return GOLIOTH_OK;
+}
+
+static struct flash_img_context flash;
+
+enum golioth_status write_fw(const struct golioth_ota_component *component,
+                             uint32_t block_idx,
+                             uint8_t *block_buffer,
+                             size_t block_size,
+                             bool is_last,
+                             void *arg)
+{
+    const char *filename = component->package;
+    int err;
+
+    LOG_INF("Writing %s block idx %u", filename, (unsigned int) block_idx);
+
+    if (block_idx == 0) {
+        err = flash_img_prepare(&flash);
+        if (err) {
+            return GOLIOTH_ERR_FAIL;
+        }
+    }
+
+    err = flash_img_buffered_write(&flash, block_buffer, block_size, is_last);
+    if (err) {
+        LOG_ERR("Failed to write to flash: %d", err);
+        return GOLIOTH_ERR_FAIL;
+    }
+
+    if (is_last) {
+        LOG_INF("Requesting upgrade");
+
+        err = boot_request_upgrade(BOOT_UPGRADE_TEST);
+        if (err) {
+            LOG_ERR("Failed to request upgrade: %d", err);
+            return GOLIOTH_ERR_FAIL;
+        }
+    }
+
+    return GOLIOTH_OK;
+}
+
 struct ota_observe_data
 {
     struct golioth_ota_manifest manifest;
@@ -130,12 +223,13 @@ struct component_desc
     const char *name;
     const char *version;
     uint8_t hash[32];
+    ota_component_block_write_cb write_block;
 };
 
 static struct component_desc component_descs[] = {
-    { .name = "greeting" },
-    { .name = "background" },
-    { .name = "main", .version = _current_version },
+    { .name = "greeting", .write_block = write_to_storage },
+    { .name = "background", .write_block = write_to_storage },
+    { .name = "main", .write_block = write_fw, .version = _current_version },
 };
 
 static int component_hash_update(struct component_desc *desc, uint8_t hash[32])
@@ -155,66 +249,17 @@ static int component_version_cmp(struct component_desc *desc, const char *versio
     return strcmp(desc->version, version);
 }
 
-static bool component_by_name_is_updatable(const char *name, const char *version, const uint8_t *hash)
+static struct component_desc *component_by_name(const char *name)
 {
     for (size_t i = 0; i < ARRAY_SIZE(component_descs); i++) {
         struct component_desc *desc = &component_descs[i];
 
-        if (strcmp(desc->name, name) != 0) {
-            continue;
+        if (strcmp(desc->name, name) == 0) {
+            return desc;
         }
-
-        return desc->version ?
-            (component_version_cmp(desc, version) != 0) :
-            (component_hash_cmp(desc, hash) != 0);
     }
 
-    return false;
-}
-
-enum golioth_status write_block(const struct golioth_ota_component *component,
-                                uint32_t block_idx,
-                                uint8_t *block_buffer,
-                                size_t block_size,
-                                bool is_last,
-                                void *arg)
-{
-    const char *filename = component->package;
-    struct fs_file_t fp = {};
-    fs_mode_t flags = FS_O_CREATE | FS_O_WRITE;
-    char path[32];
-    int err;
-    ssize_t ret;
-
-    LOG_INF("Writing %s block idx %u", filename, (unsigned int) block_idx);
-
-    if (block_idx == 0) {
-        flags |= FS_O_TRUNC;
-    }
-
-    sprintf(path, "/storage/%s", filename);
-
-    err = fs_open(&fp, path, flags);
-    if (err) {
-        LOG_ERR("Failed to open %s: %d", filename, err);
-
-        return err;
-    }
-
-    err = fs_seek(&fp, block_idx * CONFIG_GOLIOTH_BLOCKWISE_DOWNLOAD_BUFFER_SIZE, FS_SEEK_SET);
-    if (err) {
-        goto fp_close;
-    }
-
-    ret = fs_write(&fp, block_buffer, block_size);
-    if (ret < 0) {
-        goto fp_close;
-    }
-
-fp_close:
-    fs_close(&fp);
-
-    return GOLIOTH_OK;
+    return NULL;
 }
 
 static int greeting_show(void)
@@ -482,13 +527,21 @@ int main(void)
 
                 hex2bin(component->hash, strlen(component->hash), hash_bin, sizeof(hash_bin));
 
-                if (!component_by_name_is_updatable(component->package, component->version, hash_bin)) {
+                struct component_desc *desc = component_by_name(component->package);
+                if (!desc) {
+                    LOG_WRN("Unknown '%s' artifact package", component->package);
+                    continue;
+                }
+
+                if (desc->version ?
+                    (component_version_cmp(desc, component->version) == 0) :
+                    (component_hash_cmp(desc, hash_bin) == 0)) {
                     continue;
                 }
 
                 LOG_INF("Updating %s package", component->package);
 
-                status = golioth_ota_download_component(client, component, write_block, NULL);
+                status = golioth_ota_download_component(client, component, desc->write_block, NULL);
                 if (status == GOLIOTH_OK) {
                     reboot = true;
                 }
