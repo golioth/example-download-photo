@@ -19,7 +19,9 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <zephyr/sys/reboot.h>
 
 #include <zephyr/drivers/display.h>
+#if DT_HAS_CHOSEN(zephyr_display)
 #include <lvgl.h>
+#endif
 
 #include <mbedtls/sha256.h>
 
@@ -326,6 +328,7 @@ greeting_close:
     return 0;
 }
 
+#if DT_HAS_CHOSEN(zephyr_display)
 static lv_img_dsc_t img_background;
 
 static int background_show(void)
@@ -405,6 +408,9 @@ buffer_free:
 
     return err;
 }
+#else
+static inline int background_show(void) { return 0; }
+#endif
 
 int main(void)
 {
@@ -419,6 +425,7 @@ int main(void)
     greeting_show();
     background_show();
 
+#if DT_HAS_CHOSEN(zephyr_display)
     char count_str[11] = {0};
     const struct device *display_dev;
     lv_obj_t *count_label;
@@ -436,6 +443,7 @@ int main(void)
 
     lv_task_handler();
     display_blanking_off(display_dev);
+#endif
 
     /* Get system thread id so loop delay change event can wake main */
     _system_thread = k_current_get();
@@ -505,6 +513,7 @@ int main(void)
 
     while (true)
     {
+#if DT_HAS_CHOSEN(zephyr_display)
         uint32_t count_cur = k_uptime_get() / 1000;
         if (count_cur != count) {
             count = count_cur;
@@ -513,6 +522,7 @@ int main(void)
         }
 
         lv_task_handler();
+#endif
 
         err = k_sem_take(&ota_observe_data.manifest_received, K_MSEC(10));
         if (!err) {
