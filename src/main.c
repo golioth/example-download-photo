@@ -22,7 +22,7 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <mbedtls/sha256.h>
 
 /* Current firmware version; update in VERSION file */
-static const char *_current_version =
+static const char * const _current_version =
     STRINGIFY(APP_VERSION_MAJOR) "." STRINGIFY(APP_VERSION_MINOR) "." STRINGIFY(APP_PATCHLEVEL);
 
 static struct golioth_client *client;
@@ -127,32 +127,48 @@ static void on_ota_manifest(struct golioth_client *client,
 struct component_desc
 {
     const char *name;
+    const char *version;
     uint8_t hash[32];
 };
 
 static struct component_desc component_descs[] = {
     { .name = "greeting" },
     { .name = "background" },
+    { .name = "main", .version = _current_version },
 };
 
-static int component_update_hash(struct component_desc *desc, uint8_t hash[32])
+static int component_hash_update(struct component_desc *desc, uint8_t hash[32])
 {
     memcpy(desc->hash, hash, 32);
 
     return 0;
 }
 
-static int component_name_hash_cmp(const char *name, uint8_t hash[32])
+static int component_hash_cmp(struct component_desc *desc, const uint8_t hash[32])
+{
+    return memcmp(desc->hash, hash, 32);
+}
+
+static int component_version_cmp(struct component_desc *desc, const char *version)
+{
+    return strcmp(desc->version, version);
+}
+
+static bool component_by_name_is_updatable(const char *name, const char *version, const uint8_t *hash)
 {
     for (size_t i = 0; i < ARRAY_SIZE(component_descs); i++) {
-        if (strcmp(component_descs[i].name, name)) {
+        struct component_desc *desc = &component_descs[i];
+
+        if (strcmp(desc->name, name) != 0) {
             continue;
         }
 
-        return memcmp(component_descs[i].hash, hash, 32);
+        return desc->version ?
+            (component_version_cmp(desc, version) != 0) :
+            (component_hash_cmp(desc, hash) != 0);
     }
 
-    return -ENOENT;
+    return false;
 }
 
 enum golioth_status write_block(const struct golioth_ota_component *component,
@@ -168,6 +184,8 @@ enum golioth_status write_block(const struct golioth_ota_component *component,
     char path[32];
     int err;
     ssize_t ret;
+
+    LOG_INF("Writing %s block idx %u", filename, (unsigned int) block_idx);
 
     if (block_idx == 0) {
         flags |= FS_O_TRUNC;
@@ -250,7 +268,7 @@ static int greeting_show(void)
 
     LOG_HEXDUMP_INF(hash, sizeof(hash), "hash");
 
-    component_update_hash(&component_descs[0], hash);
+    component_hash_update(&component_descs[0], hash);
 
 greeting_close:
     fs_close(&greeting_fp);
@@ -322,7 +340,7 @@ static int background_show(void)
 
     LOG_HEXDUMP_INF(hash, sizeof(hash), "hash");
 
-    component_update_hash(&component_descs[1], hash);
+    component_hash_update(&component_descs[1], hash);
 
     img_header = (void *)buffer;
     img_background.header = *img_header;
@@ -462,10 +480,11 @@ int main(void)
 
                 hex2bin(component->hash, strlen(component->hash), hash_bin, sizeof(hash_bin));
 
-                if (!component_name_hash_cmp(component->package, hash_bin)) {
-                    LOG_INF("Already up to date!");
+                if (!component_by_name_is_updatable(component->package, component->version, hash_bin)) {
                     continue;
                 }
+
+                LOG_INF("Updating %s package", component->package);
 
                 status = golioth_ota_download_component(client, component, write_block, NULL);
             }
