@@ -82,3 +82,31 @@ This example implements the following Golioth services:
 * Backend Logging
 * Device Settings
 * OTA Firmware Update
+
+## Building and running this example
+
+### `native_sim`
+
+``` sh
+west build -b native_sim example-download-photo
+```
+
+or
+
+``` sh
+west build -b native_sim/native/64 example-download-photo
+```
+
+### `xiao_esp32s3`
+
+``` sh
+west build -b xiao_esp32s3 example-download-photo --sysbuild
+west flash
+```
+
+### `xiao_esp32s3` with `seeed_xiao_round_display`
+
+``` sh
+west build -b xiao_esp32s3 example-download-photo  --sysbuild --shield seeed_xiao_round_display
+west flash
+```
