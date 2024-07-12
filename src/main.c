@@ -15,6 +15,7 @@ LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 #include <samples/common/sample_credentials.h>
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
+#include <zephyr/sys/reboot.h>
 
 #include <zephyr/drivers/display.h>
 #include <lvgl.h>
@@ -364,6 +365,7 @@ int main(void)
 {
     enum golioth_status status;
     struct ota_observe_data ota_observe_data = {};
+    bool reboot = false;
     int err;
 
     LOG_DBG("Start Golioth example_download_photo");
@@ -487,7 +489,17 @@ int main(void)
                 LOG_INF("Updating %s package", component->package);
 
                 status = golioth_ota_download_component(client, component, write_block, NULL);
+                if (status == GOLIOTH_OK) {
+                    reboot = true;
+                }
             }
+        }
+
+        if (reboot) {
+            LOG_INF("Rebooting");
+            log_thread_trigger();
+            k_msleep(100);
+            sys_reboot(SYS_REBOOT_COLD);
         }
     }
 }
