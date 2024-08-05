@@ -13,19 +13,6 @@ manifest:
       submodules: true
       import:
         file: west-zephyr.yml
-        path-prefix: deps
-        name-allowlist:
-          - zephyr
-          - cmsis
-          - hal_espressif
-          - hal_nxp
-          - mbedtls
-          - mcuboot
-          - net-tools
-          - qcbor
-          - segger
-          - tinycrypt
-          - zcbor
 
   self:
     path: app
