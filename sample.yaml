@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 sample:
-  description: Golioth Example Template
-  name: example_template
+  description: Golioth Example Download Photo
+  name: example_download_photo
 common:
   harness: net
   platform_allow: >

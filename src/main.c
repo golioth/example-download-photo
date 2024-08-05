@@ -5,7 +5,7 @@
  */
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(example_template, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(example_download_photo, LOG_LEVEL_DBG);
 
 #include <app_version.h>
 #include <golioth/client.h>
@@ -76,7 +76,7 @@ static int app_settings_register(struct golioth_client *client)
 
 int main(void)
 {
-    LOG_DBG("Start Golioth example_template");
+    LOG_DBG("Start Golioth example_download_photo");
     LOG_INF("Firmware version: %s", _current_version);
 
     /* Get system thread id so loop delay change event can wake main */
