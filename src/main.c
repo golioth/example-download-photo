@@ -15,7 +15,7 @@ LOG_MODULE_REGISTER(example_template, LOG_LEVEL_DBG);
 #include <samples/common/sample_credentials.h>
 #include <zephyr/kernel.h>
 
-/* Current firmware version; update in prj.conf or via build argument */
+/* Current firmware version; update in VERSION file */
 static const char *_current_version =
     STRINGIFY(APP_VERSION_MAJOR) "." STRINGIFY(APP_VERSION_MINOR) "." STRINGIFY(APP_PATCHLEVEL);
 
