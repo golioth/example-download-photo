@@ -7,25 +7,12 @@ manifest:
   projects:
     - name: golioth
       path: modules/lib/golioth-firmware-sdk
-      revision: v0.14.0
+      revision: bump-zephyr-ncs
       url: https://github.com/golioth/golioth-firmware-sdk.git
       west-commands: scripts/west-commands.yml
       submodules: true
       import:
         file: west-zephyr.yml
-        path-prefix: deps
-        name-allowlist:
-          - zephyr
-          - cmsis
-          - hal_espressif
-          - hal_nxp
-          - mbedtls
-          - mcuboot
-          - net-tools
-          - qcbor
-          - segger
-          - tinycrypt
-          - zcbor
 
   self:
     path: app

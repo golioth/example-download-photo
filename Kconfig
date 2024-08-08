@@ -13,4 +13,55 @@ config DNS_SERVER1
 
 endif # DNS_RESOLVER
 
+configdefault MCUBOOT_SHELL
+	bool
+    default y
+
+# Workaround for not being able to have commas in macro arguments
+DT_CHOSEN_ZEPHYR_DISPLAY := zephyr,display
+
+configdefault LVGL
+	bool
+    default y if $(dt_chosen_enabled,$(DT_CHOSEN_ZEPHYR_DISPLAY))
+
+configdefault LV_MEM_CUSTOM
+	bool
+    default y
+
+configdefault LV_USE_LOG
+	bool
+    default y
+
+configdefault LV_USE_LABEL
+	bool
+    default y
+
+configdefault LV_USE_BTN
+	bool
+    default y
+
+configdefault LV_USE_ARC
+	bool
+    default y
+
+configdefault LV_USE_IMG
+	bool
+    default y
+
+configdefault LV_USE_MONKEY
+	bool
+    default y
+
+configdefault LV_FONT_MONTSERRAT_14
+	bool
+    default y
+
+configdefault LV_Z_SHELL
+	bool
+    default y
+
+configdefault LV_Z_MEM_POOL_SIZE
+	int
+    default 16384
+
 source "Kconfig.zephyr"

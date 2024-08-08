@@ -1,4 +1,4 @@
-# Golioth Example Template
+# Golioth Example Download Photo
 
 ## Overview
 
@@ -24,9 +24,9 @@ installed.
 
 ```
 cd ~
-mkdir golioth-example-template
-python -m venv golioth-example-template/.venv
-source golioth-example-template/.venv/bin/activate
+mkdir golioth-example-download-photo
+python -m venv golioth-example-download-photo/.venv
+source golioth-example-download-photo/.venv/bin/activate
 pip install wheel west
 ```
 
@@ -36,13 +36,8 @@ Run one of these two initializations based on your target board:
 
 ```
 # Initalize for Zephyr
-cd ~/golioth-example-template
-west init -m git@github.com:golioth/example-template.git --mf west-zephyr.yml .
-
-# Initalize for NCS (Nordic boards only)
-cd ~/golioth-example-template
-west init -m git@github.com:golioth/example-template.git --mf west-ncs.yml .
-
+cd ~/golioth-example-download-photo
+west init -m git@github.com:golioth/example-download-photo.git --mf west-zephyr.yml .
 ```
 
 Fetch dependencies and configure the build environment
@@ -68,13 +63,6 @@ west build -p -b <my_board_name> --sysbuild app
 west flash
 ```
 
-### NCS build commands
-
-```
-west build -p -b nrf9160dk_nrf9160_ns app
-west flash
-```
-
 ### Configure Authentication credential
 
 Configure PSK-ID and PSK using the device shell based on your Golioth
@@ -95,53 +83,30 @@ This example implements the following Golioth services:
 * Device Settings
 * OTA Firmware Update
 
-## Switch Between Zephyr and NCS
+## Building and running this example
 
-After initializing your local repository, you may switch between
-building for Zephyr boards and building for NCS boards by using the
-following commands:
+### `native_sim`
 
-### Switch to NCS Build
-
-```
-west config manifest.file west-ncs.yml
-west update
+``` sh
+west build -b native_sim example-download-photo
 ```
 
-### Switch to Zephyr Build
+or
 
+``` sh
+west build -b native_sim/native/64 example-download-photo
 ```
-west config manifest.file west-zephyr.yml
-west update
+
+### `xiao_esp32s3`
+
+``` sh
+west build -b xiao_esp32s3 example-download-photo --sysbuild
+west flash
 ```
 
-## Using this template to start a new project
+### `xiao_esp32s3` with `seeed_xiao_round_display`
 
-Fork this template to create your own Reference Design. After checking
-out your fork, use the following approach to pull in future changes:
-
-* Setup
-
-  * Create a `template` remote based on the Reference Design Template
-    repository
-
-* Merge in template changes
-
-  * Fetch template changes and tags
-  * Merge template release tag into your `main` (or other branch)
-  * Resolve merge conflicts (if any) and commit to your repository
-
-```
-# Setup
-git remote add template https://github.com/golioth/example-template.git
-git fetch template --tags
-
-# Merge in template changes
-git fetch template --tags
-git checkout your_local_branch
-git merge exampletemplate_v0.1.0
-
-# Resolve merge conflicts if necessary
-git add resolved_files
-git commit
+``` sh
+west build -b xiao_esp32s3 example-download-photo  --sysbuild --shield seeed_xiao_round_display
+west flash
 ```
